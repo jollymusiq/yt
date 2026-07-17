@@ -22,6 +22,7 @@ source venv/bin/activate
 # Install/update requirements
 echo "📦 Installing dependencies..."
 pip install -r requirements.txt
+pip install flask
 
 # Create necessary directories
 mkdir -p templates static downloads
