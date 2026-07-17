@@ -21,9 +21,7 @@ USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0'
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0'
 ]
 
 def get_random_user_agent():
@@ -45,8 +43,8 @@ def extract_video_id(url):
             return match.group(1)
     return None
 
-def get_video_info_method1(url):
-    """Method 1: Standard yt-dlp with mobile client"""
+def get_video_info_ytdlp(url):
+    """Get video info using yt-dlp"""
     try:
         ydl_opts = {
             'quiet': True,
@@ -63,57 +61,28 @@ def get_video_info_method1(url):
                 'DNT': '1',
                 'Connection': 'keep-alive',
                 'Upgrade-Insecure-Requests': '1',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'none',
-                'Cache-Control': 'no-cache',
             },
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['android', 'web', 'ios'],
+                    'player_client': ['android', 'web'],
                     'skip': ['dash', 'hls'],
-                    'use_ios_api': True,
                 }
-            }
+            },
+            'cookiefile': None,
+            'socket_timeout': 30,
+            'retries': 5,
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             return info
     except Exception as e:
-        print(f"Method 1 failed: {str(e)}")
+        print(f"yt-dlp method failed: {str(e)}")
         return None
 
-def get_video_info_method2(url):
-    """Method 2: Using yt-dlp with cookies and different client"""
+def get_video_info_subprocess(url):
+    """Get video info using subprocess (fallback)"""
     try:
-        # Use a different approach with more permissive settings
-        ydl_opts = {
-            'quiet': True,
-            'no_warnings': True,
-            'extract_flat': 'in_playlist',
-            'ignoreerrors': True,
-            'nocheckcertificate': True,
-            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['android'],
-                    'skip': ['dash', 'hls'],
-                }
-            }
-        }
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            return info
-    except Exception as e:
-        print(f"Method 2 failed: {str(e)}")
-        return None
-
-def get_video_info_method3(url):
-    """Method 3: Using yt-dlp with --no-playlist and different format"""
-    try:
-        # Use subprocess to run yt-dlp directly with more options
         cmd = [
             sys.executable, '-m', 'yt_dlp',
             '--no-warnings',
@@ -125,71 +94,28 @@ def get_video_info_method3(url):
             url
         ]
         
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        
         if result.returncode == 0 and result.stdout:
             info = json.loads(result.stdout)
             return info
         return None
     except Exception as e:
-        print(f"Method 3 failed: {str(e)}")
-        return None
-
-def get_video_info_method4(url):
-    """Method 4: Using yt-dlp with cookies from browser (if available)"""
-    try:
-        # Try to use browser cookies if available (Chrome, Firefox, etc.)
-        cookie_paths = [
-            os.path.expanduser('~/.config/google-chrome/Default/Cookies'),
-            os.path.expanduser('~/.mozilla/firefox/*/cookies.sqlite'),
-            os.path.expanduser('~/Library/Application Support/Google/Chrome/Default/Cookies'),
-        ]
-        
-        ydl_opts = {
-            'quiet': True,
-            'no_warnings': True,
-            'extract_flat': False,
-            'ignoreerrors': True,
-            'nocheckcertificate': True,
-            'user_agent': get_random_user_agent(),
-        }
-        
-        # Try to use cookies if they exist
-        for cookie_path in cookie_paths:
-            if os.path.exists(cookie_path.replace('*', 'default')):
-                ydl_opts['cookiefile'] = cookie_path
-                break
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            return info
-    except Exception as e:
-        print(f"Method 4 failed: {str(e)}")
+        print(f"Subprocess failed: {str(e)}")
         return None
 
 def get_video_info(url):
     """Get video information using multiple methods"""
     
-    # Try different methods in order
-    methods = [
-        get_video_info_method1,
-        get_video_info_method2,
-        get_video_info_method3,
-        get_video_info_method4
-    ]
-    
-    info = None
-    for i, method in enumerate(methods, 1):
-        print(f"Trying method {i}...")
-        info = method(url)
-        if info:
-            print(f"Method {i} succeeded!")
-            break
-        time.sleep(random.uniform(0.5, 1.0))
+    info = get_video_info_ytdlp(url)
     
     if not info:
-        return {'error': 'Unable to fetch video info. The video might be private, age-restricted, or unavailable. Try a different video.'}
+        print("Primary method failed, trying subprocess fallback...")
+        info = get_video_info_subprocess(url)
     
-    # Process the info
+    if not info:
+        return {'error': 'Unable to fetch video info. The video might be private, age-restricted, or unavailable.'}
+    
     try:
         formats = []
         
@@ -197,6 +123,9 @@ def get_video_info(url):
             for f in info['formats']:
                 if not f.get('url'):
                     continue
+                
+                # Debug: Print format info
+                print(f"Format: {f.get('format_id')} - vcodec: {f.get('vcodec')} - acodec: {f.get('acodec')}")
                     
                 # Video with audio
                 if f.get('vcodec') != 'none' and f.get('acodec') != 'none':
@@ -231,10 +160,19 @@ def get_video_info(url):
                         'ext': f.get('ext', 'mp4')
                     })
                 
-                # Audio only
-                if f.get('vcodec') == 'none' and f.get('acodec') != 'none':
+                # Audio only - Fix: Check for audio without video
+                elif f.get('vcodec') == 'none' and f.get('acodec') != 'none':
                     bitrate = f.get('abr', '')
-                    quality = f'Audio {bitrate}kbps' if bitrate else 'Audio'
+                    # Try to get quality from format note or use bitrate
+                    if bitrate:
+                        quality = f'Audio {bitrate}kbps'
+                    else:
+                        # Try to get quality from format note
+                        format_note = f.get('format_note', '')
+                        if format_note:
+                            quality = f'Audio {format_note}'
+                        else:
+                            quality = 'Audio'
                     
                     size = f.get('filesize') or f.get('filesize_approx', 0)
                     size_str = f'{round(size / 1024 / 1024, 1)} MB' if size else 'Unknown'
@@ -246,6 +184,31 @@ def get_video_info(url):
                         'type': 'audio',
                         'ext': f.get('ext', 'm4a')
                     })
+                
+                # Also add best audio-only formats that might be in a different format
+                if f.get('acodec') != 'none' and f.get('vcodec') == 'none':
+                    # This is already handled above, but let's make sure we catch all
+                    pass
+        
+        # Also look for audio formats in a different structure
+        if not any(f['type'] == 'audio' for f in formats):
+            # Try to extract audio formats from the formats list again with different criteria
+            for f in info['formats']:
+                if f.get('acodec') != 'none' and f.get('vcodec') == 'none' and f.get('url'):
+                    bitrate = f.get('abr', '')
+                    quality = f'Audio {bitrate}kbps' if bitrate else 'Audio'
+                    size = f.get('filesize') or f.get('filesize_approx', 0)
+                    size_str = f'{round(size / 1024 / 1024, 1)} MB' if size else 'Unknown'
+                    
+                    # Check if this itag already exists
+                    if not any(f2['itag'] == str(f.get('format_id', '')) for f2 in formats):
+                        formats.append({
+                            'itag': str(f.get('format_id', '')),
+                            'quality': quality,
+                            'size': size_str,
+                            'type': 'audio',
+                            'ext': f.get('ext', 'm4a')
+                        })
         
         # Remove duplicates
         seen = set()
@@ -256,12 +219,18 @@ def get_video_info(url):
                 unique_formats.append(f)
                 seen.add(key)
         
-        # Sort formats by quality
+        # Sort formats: videos first, then audio
+        video_formats = [f for f in unique_formats if f['type'] == 'video']
+        audio_formats = [f for f in unique_formats if f['type'] == 'audio']
+        
+        # Sort video formats by quality
         quality_order = ['4K', '2K', '1080p', '720p', '480p', '360p', '240p', '144p']
-        unique_formats.sort(key=lambda x: (
-            0 if x['type'] == 'video' else 1,
-            quality_order.index(x['quality']) if x['quality'] in quality_order else 999
-        ))
+        video_formats.sort(key=lambda x: quality_order.index(x['quality']) if x['quality'] in quality_order else 999)
+        
+        # Sort audio formats by bitrate (highest first)
+        audio_formats.sort(key=lambda x: int(re.search(r'(\d+)', x['quality']).group(1)) if re.search(r'(\d+)', x['quality']) else 0, reverse=True)
+        
+        all_formats = video_formats + audio_formats
         
         # Get thumbnail
         thumbnail = info.get('thumbnail', '')
@@ -270,22 +239,17 @@ def get_video_info(url):
             if thumbnails:
                 thumbnail = thumbnails[-1].get('url', '')
         
-        # Get video ID
-        video_id = info.get('id', '')
-        if not video_id:
-            video_id = extract_video_id(url)
-        
         return {
             'title': info.get('title', 'Unknown'),
             'uploader': info.get('uploader', 'Unknown'),
             'views': info.get('view_count', 0),
             'duration': info.get('duration', 0),
             'thumbnail': thumbnail,
-            'formats': unique_formats,
-            'video_id': video_id
+            'formats': all_formats
         }
         
     except Exception as e:
+        print(f"Error processing info: {str(e)}")
         return {'error': str(e)}
 
 @app.route('/')
@@ -324,10 +288,8 @@ def download_video():
         if not video_id:
             return jsonify({'error': 'Invalid YouTube URL'}), 400
         
-        # Random delay
         time.sleep(random.uniform(0.5, 1.0))
         
-        # Use a unique filename
         temp_filename = f"{video_id}_{itag}"
         output_template = os.path.join(app.config['DOWNLOAD_FOLDER'], f"{temp_filename}.%(ext)s")
         
@@ -350,7 +312,10 @@ def download_video():
                     'player_client': ['android', 'web'],
                     'skip': ['dash', 'hls'],
                 }
-            }
+            },
+            'cookiefile': None,
+            'retries': 5,
+            'fragment_retries': 5,
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -359,7 +324,6 @@ def download_video():
             if not info:
                 return jsonify({'error': 'Failed to download video'}), 500
             
-            # Find the downloaded file
             filename = ydl.prepare_filename(info)
             
             if os.path.exists(filename):
@@ -384,5 +348,4 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     print("🚀 Starting YouTube Downloader...")
     print(f"📍 Visit: http://127.0.0.1:{port}")
-    print("📥 Using multiple extraction methods...")
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=False)

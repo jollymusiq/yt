@@ -1,32 +1,39 @@
 #!/bin/bash
 
-# Simple run script for YouTube Downloader
+# GitHub Workspaces Setup Script
 
-echo "🚀 Starting YouTube Downloader..."
+echo "🚀 Setting up YouTube Downloader for GitHub Workspaces..."
 
-# Check if Python is installed
-if ! command -v python3 &> /dev/null; then
-    echo "❌ Python 3 is not installed. Please install Python 3.8 or higher."
-    exit 1
-fi
+# Update package list
+sudo apt-get update
 
-# Check if requirements are installed
-if [ ! -d "venv" ]; then
-    echo "📦 Creating virtual environment..."
-    python3 -m venv venv
-fi
-
-# Activate virtual environment
-source venv/bin/activate
-
-# Install/update requirements
-echo "📦 Installing dependencies..."
+# Install Python dependencies
+echo "📦 Installing Python packages..."
+pip install --upgrade pip
 pip install -r requirements.txt
-pip install flask
 
-# Create necessary directories
+# Install yt-dlp
+echo "📦 Installing yt-dlp..."
+pip install yt-dlp --upgrade
+
+# Create directories
 mkdir -p templates static downloads
 
-# Run the application
-echo "🚀 Starting server..."
-python3 app.py
+# Check if index.html exists
+if [ ! -f "templates/index.html" ]; then
+    echo "⚠️  templates/index.html not found. Creating placeholder..."
+    cat > templates/index.html << 'EOF'
+<!DOCTYPE html>
+<html>
+<head><title>YouTube Downloader</title></head>
+<body>
+    <h1>🎬 YouTube Downloader</h1>
+    <p>Please add your index.html to the templates directory.</p>
+</body>
+</html>
+EOF
+fi
+
+echo "✅ Setup complete!"
+echo "🚀 Run: python app.py"
+echo "🌐 Access: http://localhost:5000"
